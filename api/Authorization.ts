@@ -63,7 +63,6 @@ export class Authorization extends Api {
             this.logger.error(`Ошибка при чтении файла ${this.AMO_TOKEN_PATH}`);
             this.logger.debug("Попытка заново получить токен");
             const token: Token = await this.requestAccessToken();
-            const userData: DecodedToken = jwtDecode(token.access_token)
             fs.writeFileSync(this.AMO_TOKEN_PATH, JSON.stringify(token));
             this.ACCESS_TOKEN = token.access_token;
             this.REFRESH_TOKEN = token.refresh_token || '';

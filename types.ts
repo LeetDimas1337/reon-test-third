@@ -16,6 +16,11 @@ export type LoginReqQuery = {
     from_widget: string;
 }
 
+export type LogoutReqQuery = {
+    account_id: string;
+    client_id: string;
+}
+
 export type DecodedToken = {
     account_id: number
 }
