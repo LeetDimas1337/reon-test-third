@@ -1,115 +1,57 @@
-import Api, {UserApi} from "./api";
-import log4js from "log4js";
-import {getUserLogger} from "../logger";
-import fs from "fs";
-import {DecodedToken, Token} from "../types";
-import axios from "axios";
+import {amoID, authGrantTypes, TokensData} from "../types";
+import axios, {AxiosError} from "axios";
+import {getErrorMessage, getUserURL, readTokensData, writeTokenData} from "../utils";
 import config from "../config";
-import jwtDecode from "jwt-decode";
+import {mainLogger} from "../logger";
+import {OAUTH_URL, UNAUTHORIZED_STATUS_CODE} from "../consts";
 
-export class Authorization extends Api {
-    AMO_TOKEN_PATH: string;
-    LIMIT: number;
-    ROOT_PATH: string;
-    ACCESS_TOKEN: string;
-    REFRESH_TOKEN: string;
-    SUB_DOMAIN: string;
-    logger: log4js.Logger;
-    CODE: string;
 
-    constructor(subDomain: string, authCode: string) {
-        super();
-        this.SUB_DOMAIN = subDomain;
-        this.AMO_TOKEN_PATH = `./authclients/${subDomain}_amo_token.json`;
-        this.LIMIT = 200;
-        this.ROOT_PATH = `https://${this.SUB_DOMAIN}.amocrm.ru`
-        this.ACCESS_TOKEN = "";
-        this.REFRESH_TOKEN = "";
-        this.logger = getUserLogger(this.SUB_DOMAIN);
-        this.CODE = authCode;
+export const requestAccessToken = async (authCode: string, subDomain: string): Promise<TokensData> => {
+    try {
+        const {data} = await axios.post<TokensData>(getUserURL(subDomain) + OAUTH_URL, {
+            client_id: config.CLIENT_ID,
+            client_secret: config.CLIENT_SECRET,
+            grant_type: authGrantTypes.GET_TOKEN,
+            code: authCode,
+            redirect_uri: config.REDIRECT_URI,
+        });
+        return data;
+    } catch (e) {
+        mainLogger.error(getErrorMessage(e))
+        throw e;
     }
+}
 
-    authChecker = <T extends any[], D>(request: (...args: T) => Promise<D>) => {
-        return async (...args: T): Promise<D> => {
-            if (!this.ACCESS_TOKEN) {
-                return this.getAccessToken().then(() => this.authChecker(request)(...args));
-            }
-            return request(...args).catch((err: any) => {
-                this.logger.error(err.response.data);
-                const data = err.response.data;
-                if ('validation-errors' in data) {
-                    this.logger.error('args', JSON.stringify(args, null, 2))
-                }
-                if (data.status == 401 && data.title === "Unauthorized") {
-                    this.logger.debug("Нужно обновить токен");
-                    return this.refreshToken().then(() => this.authChecker(request)(...args));
-                }
-                throw err
-            });
-        };
-    };
-
-    async getAccessToken() {
-        if (this.ACCESS_TOKEN) {
-            return Promise.resolve(this.ACCESS_TOKEN)
-        }
-        try {
-            const content = fs.readFileSync(this.AMO_TOKEN_PATH).toString();
-            const token: Token = JSON.parse(content);
-            this.ACCESS_TOKEN = token.access_token;
-            this.REFRESH_TOKEN = token.refresh_token || '';
-            return Promise.resolve(token);
-        } catch (error) {
-            this.logger.error(`Ошибка при чтении файла ${this.AMO_TOKEN_PATH}`);
-            this.logger.debug("Попытка заново получить токен");
-            const token: Token = await this.requestAccessToken();
-            fs.writeFileSync(this.AMO_TOKEN_PATH, JSON.stringify(token));
-            this.ACCESS_TOKEN = token.access_token;
-            this.REFRESH_TOKEN = token.refresh_token || '';
-            return Promise.resolve(token);
-        }
+export const refreshToken = async (subDomain: string, accountId: amoID): Promise<TokensData> => {
+    try {
+        const {data} = await axios.post<TokensData>(getUserURL(subDomain) + OAUTH_URL, {
+            client_id: config.CLIENT_ID,
+            client_secret: config.CLIENT_SECRET,
+            grant_type: authGrantTypes.REFRESH_TOKEN,
+            refresh_token: (await readTokensData(accountId)).refresh_token,
+            redirect_uri: config.REDIRECT_URI
+        })
+        return data
+    } catch (e) {
+        mainLogger.error(getErrorMessage(e))
+        throw e
     }
+}
 
-    async requestAccessToken(): Promise<Token> {
-        return axios
-            .post<Token>(`${this.ROOT_PATH}/oauth2/access_token`, {
-                client_id: config.CLIENT_ID,
-                client_secret: config.CLIENT_SECRET,
-                grant_type: "authorization_code",
-                code: this.CODE,
-                redirect_uri: config.REDIRECT_URI,
-            })
-            .then((res) => {
-                this.logger.debug("Свежий токен получен");
-                return res.data;
-            })
-            .catch((err) => {
-                this.logger.error(err.response.data);
-                throw err;
-            });
-    };
-
-    async refreshToken() {
-        return axios
-            .post(`${this.ROOT_PATH}/oauth2/access_token`, {
-                client_id: config.CLIENT_ID,
-                client_secret: config.CLIENT_SECRET,
-                grant_type: "refresh_token",
-                refresh_token: this.REFRESH_TOKEN,
-                redirect_uri: config.REDIRECT_URI,
-            })
-            .then((res) => {
-                this.logger.debug("Токен успешно обновлен");
-                const token = res.data;
-                fs.writeFileSync(this.AMO_TOKEN_PATH, JSON.stringify(token));
-                this.ACCESS_TOKEN = token.ACCESS_TOKEN;
-                this.REFRESH_TOKEN = token.REFRESH_TOKEN;
-                return token;
-            })
-            .catch((err) => {
-                this.logger.error("Не удалось обновить токен");
-                this.logger.error(err.response.data);
-            });
-    };
-
+export const checkAuth = async <T extends unknown, D>(subDomain: string, accountId: amoID, request: (...args: T[]) => Promise<D>): Promise<D> => {
+    try {
+        const tokenData = await readTokensData(accountId)
+        if (!tokenData) {
+            throw new Error('You are unauthorized')
+        }
+        return await request()
+    } catch (e) {
+        if ((e as AxiosError).response?.status === UNAUTHORIZED_STATUS_CODE) {
+            mainLogger.debug('Token is invalid. Trying to refresh')
+            const newTokenData = await refreshToken(subDomain, accountId)
+            writeTokenData(accountId, newTokenData)
+            return await request()
+        }
+        throw e
+    }
 }

@@ -5,10 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start:ts": "tsc -w",
+    "start": "tsc & node dist/index.js",
+    "start:ts": "tsc",
     "start:js": "node dist/index.js",
-    "dev": "nodemon index.ts",
-    "start": "concurrently npm:start:*"
+    "dev": "nodemon index.ts"
   },
   "author": "",
   "license": "ISC",

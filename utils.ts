@@ -1,74 +1,28 @@
-import moment from "moment";
-import {CustomField} from './types/customField/customField'
+import path from "node:path";
+import {amoID, TokensData} from "./types";
+import fs from "fs";
+import {mainLogger} from "./logger";
 
-const getTodayDateTime = (): string => moment().format("YYYY-MM-DD HH:MM:ss");
+export const getTokenPath = (accountId: string | number): string => {
+    return path.resolve('authclients', accountId + '_amo_token.json')
+}
 
-const getFieldValue = (customFields: Array<CustomField>, fieldId: number) => {
-    const field = customFields
-        ? customFields.find((item) => String(item.field_id) === String(fieldId))
-        : undefined;
-    const value = field ? field.values[0].value : undefined;
-    return value;
-};
+export const getUserURL = (subDomain: string): string => {
+    return `https://${subDomain}.amocrm.ru/`
+}
+export const getErrorMessage = (e: unknown): string => {
+    return (e as Error).message
+}
 
-const getFieldValues = (customFields: Array<CustomField>, fieldId: number) => {
-    const field = customFields
-        ? customFields.find((item) => {
-            return String(item.field_id) === String(fieldId)
-        })
-        : undefined;
-    const values = field ? field.values : [];
-    return values.map(item => item.value);
-};
-
-
-const makeField = (field_id: number, value?: string | number | boolean, enum_id?: number) => {
-    if (!value) {
-        return undefined;
+export const readTokensData = async (accountId: amoID): Promise<TokensData> => {
+    try {
+        const content = fs.readFileSync(getTokenPath(accountId)).toString()
+        return JSON.parse(content)
+    } catch (e) {
+        mainLogger.error(getErrorMessage(e))
+        throw e
     }
-    return {
-        field_id,
-        values: [
-            {
-                value,
-                enum_id
-            },
-        ],
-    };
-};
-
-const getHumanizeTimeFromUnix = (unixTimeStamp: number) => {
-    // Принимаем в секундах, моменту нужны миллисекунды
-    const time = unixTimeStamp * 1000;
-    return moment(time).format("YYYY-MM-DD HH:mm:ss.SSS")
-};
-
-const getUnixBirthDate = (date: string) => {
-    const unix = moment(date, "DD.MM.YYYY").utcOffset(-3).unix();
-    return unix;
-};
-
-const getDateUnixValue = (date: string) => {
-    return moment(
-        moment(date).utcOffset(3).format("DD.MM.YYYY HH:mm:ss"),
-        "DD.MM.YYYY HH:mm:ss"
-    ).unix();
-};
-
-const getUniqNumbers = (numbers: number[]): number[] => {
-    const numberCollection = new Set();
-    numbers.forEach((number) => numberCollection.add(number));
-    const uniqNumbers = Array.from(numberCollection).map(Number);
-    return uniqNumbers;
-};
-
-export {
-    getFieldValue,
-    getFieldValues,
-    makeField,
-    getUnixBirthDate,
-    getDateUnixValue,
-    getTodayDateTime,
-    getUniqNumbers,
-    getHumanizeTimeFromUnix
-};
+}
+export const writeTokenData = (accountId: amoID, tokensData: TokensData) => {
+    fs.writeFileSync(getTokenPath(accountId), JSON.stringify(tokensData))
+}
