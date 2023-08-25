@@ -1,59 +1,59 @@
-import log4js from "log4js"; 
+import log4js, { Logger } from 'log4js';
 
 log4js.configure({
     appenders: {
-      out: {
-        type: "stdout",
-        layout: {
-          type: "pattern",
-          pattern: "%d %p %f:%l %m%n",
-        },
-      },
-      everything: {
-        type: "file",
-        filename: "./logs/logs.log",
-        maxLogSize: 1024000,
-        layout: {
-          type: "pattern",
-          pattern: "%d %p %f:%l %m%n",
-        },
-      },
-    },
-    categories: {
-      default: { appenders: ["everything", "out"], level: "debug", enableCallStack: true },
-    },
-  });
-  const mainLogger = log4js.getLogger();
-  
-  const getUserLogger = (subdomain: string) => {
-    log4js.configure({
-      appenders: {
         out: {
-          type: "stdout",
-          layout: {
-            type: "pattern",
-            pattern: "%d %p %f:%l %m%n",
-          },
+            type: 'stdout',
+            layout: {
+                type: 'pattern',
+                pattern: '%d %p %f:%l %m%n'
+            }
         },
         everything: {
-          type: "file",
-          filename: `./logs/${subdomain}/logs.log`,
-          maxLogSize: 1024000,
-          layout: {
-            type: "pattern",
-            pattern: "%d %p %f:%l %m%n",
-          },
+            type: 'file',
+            filename: './logs/logs.log',
+            maxLogSize: 1024000,
+            layout: {
+                type: 'pattern',
+                pattern: '%d %p %f:%l %m%n'
+            }
+        }
+    },
+    categories: {
+        default: { appenders: ['everything', 'out'], level: 'debug', enableCallStack: true }
+    }
+});
+const mainLogger = log4js.getLogger();
+
+const getUserLogger = (subdomain: string): Logger => {
+    log4js.configure({
+        appenders: {
+            out: {
+                type: 'stdout',
+                layout: {
+                    type: 'pattern',
+                    pattern: '%d %p %f:%l %m%n'
+                }
+            },
+            everything: {
+                type: 'file',
+                filename: `./logs/${subdomain}/logs.log`,
+                maxLogSize: 1024000,
+                layout: {
+                    type: 'pattern',
+                    pattern: '%d %p %f:%l %m%n'
+                }
+            }
         },
-      },
-      categories: {
-        default: { appenders: ["everything", "out"], level: "debug", enableCallStack: true },
-      },
+        categories: {
+            default: { appenders: ['everything', 'out'], level: 'debug', enableCallStack: true }
+        }
     });
-  
+
     return log4js.getLogger();
-  }
-  
- export {
-    getUserLogger, 
+};
+
+export {
+    getUserLogger,
     mainLogger
- }
+};
